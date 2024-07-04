@@ -1,0 +1,22 @@
+{
+    "java.project.sourcePaths": [
+        "src"
+    ],
+    "java.project.outputPath": "bin",
+    "java.project.referencedLibraries": {
+        "include": [
+            "lib/**/*.jar",
+            "c:\\Users\\User\\Downloads\\mysql-connector-j-8.3.0.jar",
+            "c:\\Users\\User\\Downloads\\javax.activation.jar",
+            "c:\\Users\\User\\Downloads\\javax.mail.jar",
+            "c:\\Users\\User\\Downloads\\javaxactivation.jar",
+            "c:\\Users\\User\\Downloads\\javax.jar",
+            "c:\\Users\\User\\Documents\\java\\javax.jar",
+            "c:\\Users\\User\\Documents\\java\\javaxactivation.jar"
+        ],
+        "exclude": [
+            "lib/javax.mail.jar",
+            "lib/javax.activation.jar"
+        ]
+    }
+}

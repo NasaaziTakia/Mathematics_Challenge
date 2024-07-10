@@ -467,7 +467,7 @@ class ClientHandler extends Thread {
                     List<Question> questions = getQuestions(challengeNumber);
                     List<String> answers = new ArrayList<>(Collections.nCopies(questions.size(), ""));
                     List<Long> questionTimes = new ArrayList<>(Collections.nCopies(questions.size(), 0L));
-                    int score = 0; // Initialize score to zero
+                    // double scorePercentage = 0; // Initialize score to zero
                     long startTime = System.currentTimeMillis();
                     long endTime = startTime + challengeDuration * 60000; // challengeDuration is in minutes
                     boolean isComplete = false;
@@ -498,11 +498,12 @@ class ClientHandler extends Thread {
                         }
         
                         // Calculate the score using only the first numQuestions questions
-                        score = calculateScore(questions.subList(0, numQuestions), answers.subList(0, numQuestions));
-                        out.println("Your score is: " + score);
+                        double scorePercentage = calculateScorePercentage(questions.subList(0, numQuestions), answers.subList(0, numQuestions));
+                        out.println("Your score is: " + scorePercentage + "%");
+        
         
                         // Store the challenge attempt in the database
-                        handleAttempt(challengeNumber, username, studentNumber, score, isComplete);
+                        handleAttempt(challengeNumber, username, studentNumber, scorePercentage, isComplete);
         
                         // Generate the report using only the first numQuestions questions
                         generateReport(questions.subList(0, numQuestions), answers.subList(0, numQuestions), questionTimes.subList(0, numQuestions), startTime);
@@ -518,7 +519,7 @@ class ClientHandler extends Thread {
         }
         
         
-        public void handleAttempt(String challengeNumber, String username, String studentNumber, int score, boolean isComplete) {
+        public void handleAttempt(String challengeNumber, String username, String studentNumber, double scorePercentage, boolean isComplete) {
             String query = "INSERT INTO attempt (challengeNumber, username, studentNumber, score, isComplete) VALUES (?, ?, ?, ?, ?)";
         
             try (Connection conn = DriverManager.getConnection(dbUrl, dbUsername, dbPassword);
@@ -527,7 +528,7 @@ class ClientHandler extends Thread {
                 stmt.setString(1, challengeNumber);
                 stmt.setString(2, username);
                 stmt.setString(3, studentNumber);
-                stmt.setInt(4, score);
+                stmt.setDouble(4, scorePercentage);
                 stmt.setString(5, isComplete ? "yes" : "no");
                 stmt.executeUpdate();
             } catch (SQLException e) {
@@ -535,24 +536,28 @@ class ClientHandler extends Thread {
             }
         }
         
-        public int calculateScore(List<Question> questions, List<String> answers) {
-            int score = 0;
-        
-            for (int i = 0; i < questions.size(); i++) {
-                String correctAnswer = getCorrectAnswer(questions.get(i).id);
-                String userAnswer = answers.get(i);
-                int marks = questions.get(i).marks;
-        
-                if (userAnswer.equals("-")) {
-                    // No marks for unsure answers
-                } else if (userAnswer.equals(correctAnswer)) {
-                    score += marks;
-                } else {
-                    score -= 3;
+         
+            public double calculateScorePercentage(List<Question> questions, List<String> answers) {
+                int score = 0;
+                int totalMarks = 0;
+            
+                for (int i = 0; i < questions.size(); i++) {
+                    String correctAnswer = getCorrectAnswer(questions.get(i).id);
+                    String userAnswer = answers.get(i);
+                    int marks = questions.get(i).marks;
+            
+                    if (userAnswer.equals("-")) {
+                        // No marks for unsure answers
+                    } else if (userAnswer.equals(correctAnswer)) {
+                        score += marks;
+                    } else {
+                        score -= 3;
+                    }
+                    totalMarks += marks;
                 }
+            
+                return totalMarks > 0 ? (double) score / totalMarks * 100 : 0;
             }
-            return score;
-        }
         
         private String getCorrectAnswer(int questionId) {
             String query = "SELECT answer_text FROM answers WHERE question_id = ?";

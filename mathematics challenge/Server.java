@@ -50,29 +50,32 @@ class ClientHandler extends Thread {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            try {
-                if (in != null) in.close();
-                if (out != null) out.close();
-                if (soc != null) soc.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            closeResources();
         }
     }
 
-    private void handleClientCommands() throws IOException {
+    private void handleClientCommands() {
         String command;
 
-        while ((command = in.readLine()) != null) {
-            if (command.startsWith("login")) {
-                handleLogin(command);
-            } else if (command.startsWith("register")) {
-                handleRegistration(command);
-            } else if (loggedIn && command.equals("view challenge")) {
-                sendChallengeData();
-            } else {
-                out.println("Invalid command");
+        try {
+            while ((command = in.readLine()) != null) {
+                if (command.startsWith("login")) {
+                    handleLogin(command);
+                } else if (command.startsWith("register")) {
+                    handleRegistration(command);
+                } else if (loggedIn && command.equals("view challenge")) {
+                    sendChallengeData();
+                } else if (loggedIn && command.equals("logout")) {
+                    out.println("Logout successful");
+                    loggedIn = false;
+                    closeResources();
+                    break;
+                } else {
+                    out.println("Invalid command");
+                }
             }
+        } catch (IOException e) {
+            System.out.println("Connection with client lost: " + e.getMessage());
         }
     }
 
@@ -120,97 +123,130 @@ class ClientHandler extends Thread {
     }
 
     private void handleRegistration(String command) {
-        String userDetails = command.substring(9); // Remove "register " prefix
-        String[] details = userDetails.split(" ");
-        if (details.length < 7) {
-            out.println("Invalid input data");
-            return;
-        }
-
-        String username = details[0];
-        String firstname = details[1];
-        String lastname = details[2];
-        String emailAddress = details[3];
-        String dateOfBirth = details[4];
-        String studentNumber = details[5];
-        String imageFilePath = details[6];
-
-        if (usernameExists(username)) {
-            out.println("Username '" + username + "' already exists. Please choose a different username.");
-            System.out.println("Username '" + username + "' already exists. Registration failed.");
-            return;
-        }
-
-        // Initialize variables
-        String representativeEmail = null;
-        boolean matchFound = false;
-
-        // Check if the student number exists in the participants table
-        try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/competition", "root", "")) {
-            String checkStudentSql = "SELECT id, student_number FROM Participants WHERE student_number = ?";
-            try (PreparedStatement checkStudentStmt = conn.prepareStatement(checkStudentSql)) {
-                checkStudentStmt.setString(1, studentNumber);
-                ResultSet rs = checkStudentStmt.executeQuery();
-                if (rs.next()) {
-                    matchFound = true;
-                }
+        try {
+            String userDetails = command.substring(9); // Remove "register " prefix
+            String[] details = userDetails.split(" ");
+            if (details.length < 7) {
+                out.println("Invalid input data");
+                return;
             }
-        } catch (SQLException e) {
+
+            String username = details[0];
+            String firstname = details[1];
+            String lastname = details[2];
+            String emailAddress = details[3];
+            String dateOfBirth = details[4];
+            String studentNumber = details[5];
+            String imageFilePath = details[6];
+
+            // Check if the username already exists
+            if (usernameExists(username)) {
+                out.println("Username '" + username + "' already exists. Please choose a different username.");
+                System.out.println("Username '" + username + "' already exists. Registration failed.");
+                return;
+            }
+
+            // Check if the user has been previously rejected
+            if (isRejected(username, studentNumber)) {
+                out.println("You were rejected by this school.");
+                System.out.println("Registration attempt with rejected username and student number: " + username + ", " + studentNumber);
+                return;
+            }
+
+            String representativeEmail = null;
+            boolean matchFound = false;
+
+            // Check if the student number matches any school registration number
+            try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/competition", "root", "")) {
+                String checkStudentSql = "SELECT representative_email FROM schools WHERE registration_number = ?";
+                try (PreparedStatement checkStudentStmt = conn.prepareStatement(checkStudentSql)) {
+                    checkStudentStmt.setString(1, studentNumber);
+                    ResultSet rs = checkStudentStmt.executeQuery();
+                    if (rs.next()) {
+                        representativeEmail = rs.getString("representative_email");
+                        matchFound = true;
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                out.println("Database error: " + e.getMessage());
+                return;
+            }
+
+            if (!matchFound) {
+                out.println("No match found for the provided student number.");
+                System.out.println("No match found for the provided student number.");
+                return;
+            }
+
+            // Handle the image file upload
+            File imageFile = new File("received_" + imageFilePath.substring(imageFilePath.lastIndexOf(File.separator) + 1));
+            try (FileOutputStream fos = new FileOutputStream(imageFile);
+                 InputStream is = soc.getInputStream()) {
+
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, bytesRead);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                out.println("File handling error: " + e.getMessage());
+                return;
+            }
+
+            // Write user details to a file
+            writeToFile(username, firstname, lastname, emailAddress, dateOfBirth, studentNumber, imageFile.getAbsolutePath());
+
+            // Send confirmation email to the school representative
+            sendEmail(representativeEmail, firstname, lastname);
+
+            out.println("User successfully registered");
+            System.out.println("User successfully registered");
+        } catch (Exception e) {
             e.printStackTrace();
+            out.println("An unexpected error occurred: " + e.getMessage());
         }
+    }
 
-        if (!matchFound) {
-            // No matching student number found
-            out.println("No match found for the provided student number.");
-            System.out.println("No match found for the provided student number.");
-            return;
-        }
+    private boolean usernameExists(String username) {
+        String filePath = "registered_participants.txt";
 
-        // Create a File object for the image file received from the client
-        File imageFile = new File("received_" + imageFilePath.substring(imageFilePath.lastIndexOf(File.separator) + 1));
-        try (FileOutputStream fos = new FileOutputStream(imageFile);
-             InputStream is = soc.getInputStream()) {
-
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = is.read(buffer)) != -1) {
-                fos.write(buffer, 0, bytesRead);
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] details = line.split(",");
+                if (details.length > 0 && details[0].equals(username)) {
+                    return true; // Username exists
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        // Write participant details to a text file
-        writeToFile(username, firstname, lastname, emailAddress, dateOfBirth, studentNumber, imageFile.getAbsolutePath());
-
-        // Send email to the school representative
-        sendEmail(representativeEmail, firstname, lastname);
-
-        // Send response to client indicating successful registration
-        out.println("User successfully registered");
-        System.out.println("User successfully registered");
+        return false; // Username does not exist
     }
 
-    private boolean usernameExists(String username) {
+    private boolean isRejected(String username, String studentNumber) {
         String dbUrl = "jdbc:mysql://localhost:3306/competition";
         String dbUsername = "root";
         String dbPassword = "";
 
-        String query = "SELECT * FROM Participants WHERE username = ?";
+        String query = "SELECT username, studentNumber FROM rejected WHERE username = ? AND studentNumber = ?";
 
         try (Connection conn = DriverManager.getConnection(dbUrl, dbUsername, dbPassword);
              PreparedStatement stmt = conn.prepareStatement(query)) {
 
             stmt.setString(1, username);
+            stmt.setString(2, studentNumber);
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
-                return true; // Username exists
+                return true; // Username and student number found in rejected table
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return false; // Username does not exist
+        return false; // Username and student number not found in rejected table
     }
 
     private void writeToFile(String username, String firstname, String lastname, String email, String dob, String studentNumber, String imagePath) {
@@ -235,7 +271,7 @@ class ClientHandler extends Thread {
 
         Session session = Session.getDefaultInstance(properties, new javax.mail.Authenticator() {
             protected javax.mail.PasswordAuthentication getPasswordAuthentication() {
-                return new javax.mail.PasswordAuthentication("tahiatasha23@gmail.com", "cbqj nhrx mecw iusv"); // replace with your email and password
+                return new javax.mail.PasswordAuthentication("tahiatasha23@gmail.com", "jgsm dfga ojpd myrt"); // replace with your email and password
             }
         });
 
@@ -284,4 +320,16 @@ class ClientHandler extends Thread {
             out.println("Error fetching challenge data");
         }
     }
+
+    private void closeResources() {
+        try {
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (soc != null) soc.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
+
+

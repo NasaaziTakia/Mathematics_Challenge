@@ -1,3 +1,5 @@
+package Participant;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
@@ -38,16 +40,32 @@ public class Client {
                                 }
                                 System.out.println(serverResponse);
                             }
-                        }else if (command.startsWith("attemptchallenge")) {
+                        } else if (command.startsWith("attemptchallenge")) {
                             out.println(command);
                             String serverResponse;
-                            while ((serverResponse = in.readLine()) != null) {
-                                if (serverResponse.isEmpty()) {
+                            while (true) {
+                                serverResponse = in.readLine();
+
+                                // Check if the challenge is completed
+                                if (serverResponse.equals("Challenge completed!")) {
+                                    System.out.println(serverResponse);
                                     break;
                                 }
+
+                                // Print other responses (question details, etc.)
+                                System.out.println(serverResponse);
+                                if (serverResponse.startsWith("Enter answer: ")) {
+                                    // answer is entered here
+                                    String answer = scanner.nextLine();  // Read user input
+                                    out.println(answer);     // Send user input to server
+                                }
+                            }
+
+                            // Print final responses after challenge completion
+                            while ((serverResponse = in.readLine()) != null && !serverResponse.isEmpty()) {
                                 System.out.println(serverResponse);
                             }
-                        }else if (command.equals("logout")) {
+                        } else if (command.equals("logout")) {
                             System.out.println("Logging out...");
                             break;
                         } else {
@@ -143,4 +161,3 @@ public class Client {
         }
     }
 }
-

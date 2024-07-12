@@ -153,6 +153,8 @@ class ClientHandler extends Thread {
             String studentNumber = details[5];
             String imageFilePath = details[6];
 
+            String studentNumberPrefix = studentNumber.split("/")[0];
+
             // Check if the username already exists
             if (usernameExists(username)) {
                 out.println("Username '" + username + "' already exists. Please choose a different username.");
@@ -174,7 +176,7 @@ class ClientHandler extends Thread {
             try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/competition", "root", "")) {
                 String checkStudentSql = "SELECT representative_email FROM schools WHERE registration_number = ?";
                 try (PreparedStatement checkStudentStmt = conn.prepareStatement(checkStudentSql)) {
-                    checkStudentStmt.setString(1, studentNumber);
+                    checkStudentStmt.setString(1, studentNumberPrefix);
                     ResultSet rs = checkStudentStmt.executeQuery();
                     if (rs.next()) {
                         representativeEmail = rs.getString("representative_email");
@@ -463,7 +465,7 @@ class ClientHandler extends Thread {
                 int attemptCount = countAttempt(challengeNumber, username, studentNumber);
         
                 // Check if the participant has not exceeded the maximum attempts (3 attempts allowed)
-                if (attemptCount <= 3) {
+                if (attemptCount <= 2) {
                     List<Question> questions = getQuestions(challengeNumber);
                     List<String> answers = new ArrayList<>(Collections.nCopies(questions.size(), ""));
                     List<Long> questionTimes = new ArrayList<>(Collections.nCopies(questions.size(), 0L));
@@ -471,6 +473,7 @@ class ClientHandler extends Thread {
                     long startTime = System.currentTimeMillis();
                     long endTime = startTime + challengeDuration * 60000; // challengeDuration is in minutes
                     boolean isComplete = false;
+                    int remain =2-attemptCount;
         
                     try {
                         for (int i = 0; i < questions.size(); i++) {
@@ -498,15 +501,23 @@ class ClientHandler extends Thread {
                         }
         
                         // Calculate the score using only the first numQuestions questions
+                        long endingTime = System.currentTimeMillis();
+                        long totalTime = endingTime - startTime;
+                        // Calculate the score using only the first numQuestions questions
                         double scorePercentage = calculateScorePercentage(questions.subList(0, numQuestions), answers.subList(0, numQuestions));
                         out.println("Your score is: " + scorePercentage + "%");
-        
-        
+                        out.println("Total Time Taken: " + totalTime / 60000 + " minutes " + (totalTime % 60000) / 1000 + " seconds");
+                        out.println("Remaining chances to attempt  this challenge : " + remain);
+                        
+                        out.println("Available Challenges Are : " );
+                        sendChallengeData();
                         // Store the challenge attempt in the database
                         handleAttempt(challengeNumber, username, studentNumber, scorePercentage, isComplete);
         
                         // Generate the report using only the first numQuestions questions
+                        ReportEmail( studentNumber,  questions,  answers,  questionTimes,  startTime);
                         generateReport(questions.subList(0, numQuestions), answers.subList(0, numQuestions), questionTimes.subList(0, numQuestions), startTime);
+                        
                     } finally {
                         // Close any resources if needed
                     }
@@ -623,6 +634,126 @@ class ClientHandler extends Thread {
         
             return count;
         }
+        public String generateEmailReport(List<Question> questions, List<String> answers, List<Long> questionTimes, long startTime) {
+            long endTime = System.currentTimeMillis();
+            long totalTimeTaken = endTime - startTime; // in milliseconds
+            
+            StringBuilder report = new StringBuilder();
+            report.append("\n=== Challenge Report ===\n");
+            report.append("Total Time Taken: ").append(totalTimeTaken / 60000).append(" minutes ")
+                  .append((totalTimeTaken % 60000) / 1000).append(" seconds\n");
+            
+            for (int i = 0; i < questions.size(); i++) {
+                report.append("\nQuestion ").append(i + 1).append(": ").append(questions.get(i).text).append("\n");
+                report.append("Your answer: ").append(answers.get(i)).append("\n");
+                String correctAnswer = getCorrectAnswer(questions.get(i).id);
+                int marks = 0;
+                if (answers.get(i).equals("-")) {
+                    marks = 0;
+                } else if (answers.get(i).equals(correctAnswer)) {
+                    marks = questions.get(i).marks;
+                } else {
+                    marks = -3;
+                }
+                report.append("Marks: ").append(marks).append("\n");
+                report.append("Time taken: ").append(questionTimes.get(i) / 1000).append(" seconds\n");
+            }
+            
+            return report.toString();
+        }
+        
+        public void ReportEmail(String studentNumber, List<Question> questions, List<String> answers, List<Long> questionTimes, long startTime) {
+            String from = "tahiatasha23@gmail.com"; // replace with your email
+            String host = "smtp.gmail.com";
+            String email = getEmailFromDatabase(studentNumber);
+        
+            if (email == null) {
+                System.out.println("No participant found with student number: " + studentNumber);
+                return;
+            }
+        
+            Properties properties = System.getProperties();
+            properties.setProperty("mail.smtp.host", host);
+            properties.setProperty("mail.smtp.port", "587");
+            properties.setProperty("mail.smtp.auth", "true");
+            properties.setProperty("mail.smtp.starttls.enable", "true");
+        
+            Session session = Session.getDefaultInstance(properties, new javax.mail.Authenticator() {
+                protected javax.mail.PasswordAuthentication getPasswordAuthentication() {
+                    return new javax.mail.PasswordAuthentication("tahiatasha23@gmail.com", "zdkw aorj fxil ssya"); // replace with your email and password
+                }
+            });
+        
+            try {
+                String report = generateEmailReport(questions, answers, questionTimes, startTime);
+        
+                MimeMessage message = new MimeMessage(session);
+                message.setFrom(new InternetAddress(from));
+                message.addRecipient(Message.RecipientType.TO, new InternetAddress(email));
+                message.setSubject("Challenge Report");
+                message.setText(report);
+        
+                Transport.send(message);
+                out.println("Report sent successfully to your email " + email);
+                System.out.println("Report sent successfully to participant email " + email);
+            } catch (MessagingException mex) {
+                mex.printStackTrace();
+            }
+        }
+        
+        private String getEmailFromDatabase(String studentNumber) {
+            String email = null;
+            String url = "jdbc:mysql://localhost:3306/competition"; // replace with your database URL
+            String user = "root"; // replace with your database username
+            String password = ""; // replace with your database password
+        
+            try (Connection conn = DriverManager.getConnection(url, user, password)) {
+                String query = "SELECT email FROM participants WHERE studentNumber = ?";
+                PreparedStatement preparedStatement = conn.prepareStatement(query);
+                preparedStatement.setString(1, studentNumber);
+                ResultSet resultSet = preparedStatement.executeQuery();
+        
+                if (resultSet.next()) {
+                    email = resultSet.getString("email");
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        
+            return email;
+        }
+        
+    private void sendChallengeData() {
+        String dbUrl = "jdbc:mysql://localhost:3306/competition";
+        String dbUsername = "root";
+        String dbPassword = "";
+
+        String query = "SELECT challengeNumber, end_date, duration, num_questions FROM challenge WHERE end_date > CURDATE()";
+
+        try (Connection conn = DriverManager.getConnection(dbUrl, dbUsername, dbPassword);
+             PreparedStatement stmt = conn.prepareStatement(query);
+             ResultSet rs = stmt.executeQuery()) {
+
+            StringBuilder response = new StringBuilder();
+            while (rs.next()) {
+                String challengeNumber = rs.getString("challengeNumber");
+                String endDate = rs.getString("end_date");
+                int duration = rs.getInt("duration");
+                int numQuestions = rs.getInt("num_questions");
+
+                response.append("Challenge Number: ").append(challengeNumber)
+                        .append(", End Date: ").append(endDate)
+                        .append(", Duration: ").append(duration)
+                        .append(", Number of Questions: ").append(numQuestions).append("\n");
+            }
+
+            out.println(response.toString());
+        } catch (SQLException e) {
+            System.out.println(e);
+            e.printStackTrace();
+            out.println("Error fetching challenge data");
+        }
+    }
     }
 
     private void closeResources() {

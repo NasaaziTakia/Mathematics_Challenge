@@ -312,7 +312,7 @@ class ClientHandler extends Thread {
                 response.append("Challenge Number: ").append(challengeNumber)
                         .append(", End Date: ").append(endDate)
                         .append(", Duration: ").append(duration)
-                        .append(", Number of Questions: ").append(numQuestions).append("\n");
+                        .append(", Number of Questions: ").append(numQuestions).append("\nEnter the command 'attemptChallenge challengeNumber' to attempt a challenge:");
             }
 
             out.println(response.toString());

@@ -5,6 +5,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+import DatabaseConnection.DatabaseConnection;
+
 public class Authentication {
     public static String validateUser(String name, String reg_number) {
         String VALIDATE_USER_SQL = "SELECT * FROM schools WHERE registration_number = ? AND representative_name = ?";

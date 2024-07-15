@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
+import DatabaseConnection.DatabaseConnection;
+
 public class Functions {
 
     public static void DisplayOptions(String school_id) throws SQLException, InterruptedException, IOException {

@@ -32,14 +32,7 @@ public class Client {
                     while (true) {
                         String command = scanner.nextLine().trim().toLowerCase();
                         if (command.equals("view challenge")) {
-                            out.println(command);
-                            String serverResponse;
-                            while ((serverResponse = in.readLine()) != null) {
-                                if (serverResponse.isEmpty()) {
-                                    break;
-                                }
-                                System.out.println(serverResponse);
-                            }
+                            challengeFunctions.ViewChallenges(scanner);
                         } else if (command.equals("logout")) {
                             System.out.println("Logging out...");
                             break;

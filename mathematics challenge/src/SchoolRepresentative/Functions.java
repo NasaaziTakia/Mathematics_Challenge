@@ -79,7 +79,8 @@ public class Functions {
     }
 
     public static void DisplayPendingParticipants(String school_id, Scanner scanner) throws SQLException {
-        Path path = Paths.get("src/Participants.txt");
+        Path path = Paths.get("C:\\Users\\TAHIA\\Desktop\\Mathematics_Challenge\\src\\Participants.txt");
+        System.out.println(path.toAbsolutePath());
         boolean record = false;
 
         try {
@@ -90,8 +91,9 @@ public class Functions {
             for (String line : lines) {
                 // Split the line by comma
                 String[] parts = line.split(",");
+                String studentNumberPrefix = parts[5].trim().split("/")[0];
                 if (parts.length == 7) {
-                    if (school_id.equals(parts[5].trim())) {
+                    if (school_id.equals(studentNumberPrefix)) {
                         record = true;
 
                         // Assign each part to a variable

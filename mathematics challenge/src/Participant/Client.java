@@ -91,7 +91,7 @@ public class Client {
 
     private static boolean handleLogin(Scanner scanner, PrintWriter out, BufferedReader in) throws IOException {
         System.out.println("Enter login command: ");
-        System.out.println("username student_number");
+        System.out.println("username password");
 
         String loginCommand = scanner.nextLine().trim();
         out.println("login " + loginCommand); // Send login command to the server

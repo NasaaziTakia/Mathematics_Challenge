@@ -45,6 +45,11 @@ class ClientHandler extends Thread {
     private boolean loggedIn = false;
     private String loggedInUsername = null;
     private String loggedInStudentNumber = null;
+    //Database connectivity
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/yourDatabase";
+    private static final String DB_USER = "yourUsername";
+    private static final String DB_PASSWORD = "yourPassword";
+    // out.println("Login successful");
 
     public ClientHandler(Socket soc) {
         this.soc = soc;
@@ -99,12 +104,30 @@ class ClientHandler extends Thread {
         }
 
         String username = details[1];
-        String studentNumber = details[2];
+        String password = details[2];
 
-        if (validateLogin(username, studentNumber)) {
-            loggedIn = true;
-            loggedInUsername = username;
-            loggedInStudentNumber = studentNumber;
+        if (validateLogin(username, password)) {
+            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+                // Prepare the SQL statement
+                String sql = "SELECT username, studentNumber FROM participants WHERE username = ? AND password = ?";
+                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                    pstmt.setString(1, username);
+                    pstmt.setString(2, password);
+                    
+                    // Execute the query
+                    try (ResultSet rs = pstmt.executeQuery()) {
+                        if (rs.next()) {
+                            loggedInUsername = rs.getString("username");
+                            loggedInStudentNumber = rs.getString("studentNumber");
+                            loggedIn = true;
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                // Handle SQL exceptions
+            }
+            // loggedInStudentNumber = studentNumber;
             out.println("Login successful");
             System.out.println("User '" + username + "' logged in successfully");
         } else {
@@ -113,18 +136,18 @@ class ClientHandler extends Thread {
         }
     }
 
-    private boolean validateLogin(String username, String studentNumber) {
+    private boolean validateLogin(String username, String password) {
         String dbUrl = "jdbc:mysql://localhost:3306/competition";
         String dbUsername = "root";
         String dbPassword = "";
 
-        String query = "SELECT username, studentNumber FROM participants WHERE username = ? AND studentNumber = ?";
+        String query = "SELECT username, password FROM participants WHERE username = ? AND password = ?";
 
         try (Connection conn = DriverManager.getConnection(dbUrl, dbUsername, dbPassword);
              PreparedStatement stmt = conn.prepareStatement(query)) {
 
             stmt.setString(1, username);
-            stmt.setString(2, studentNumber);
+            stmt.setString(2, password);
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {

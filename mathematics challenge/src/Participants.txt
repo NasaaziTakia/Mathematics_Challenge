@@ -1,2 +1,0 @@
-user1,nasa,tahia,tahiatasha23@gmail.com,2001-10-10,2200/6674,C:\Users\TAHIA\Desktop\Mathematics_Challenge\mathematics challenge\received_tasha.png
-user10,tahia,tasha,tahiatasha23@gmail.com,20011-10-10,2200/6674,C:\Users\TAHIA\Desktop\Mathematics_Challenge\mathematics challenge\received_tasha.png
